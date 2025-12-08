@@ -1,10 +1,10 @@
+import './App.css';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Upload, Settings, LayoutGrid, AlertCircle, Check, Download, Table as TableIcon, RefreshCw, User, Trash2, FileSpreadsheet, FileText, Utensils, Sparkles, Loader2, ArrowRight, ListFilter, Briefcase, PieChart, ChevronRight, Circle, Square, Users, Lock, Unlock, Map, GripHorizontal, Shuffle, Search, FileDown, ChevronDown, Move, ShieldCheck, ShieldAlert, Globe } from 'lucide-react';
-
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
+import { Upload, Settings, LayoutGrid, AlertCircle, Check, Download, Table as TableIcon, RefreshCw, User, Trash2, FileSpreadsheet, FileText, Utensils, Sparkles, Loader2, ArrowRight, ListFilter, Briefcase, PieChart, ChevronRight, Circle, Square, Users, Lock, Unlock, Map, GripHorizontal, Shuffle, Search, FileDown, ChevronDown, Move, ShieldCheck, ShieldAlert, Globe } from 'lucide-react';
 
 const SeatingApp = () => {
   // State
@@ -15,9 +15,6 @@ const SeatingApp = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAICleaning, setIsAICleaning] = useState(false);
   const [useAICleaning, setUseAICleaning] = useState(false);
-  const [excelLibLoaded, setExcelLibLoaded] = useState(false);
-  const [pdfLibLoaded, setPdfLibLoaded] = useState(false);
-  const [html2CanvasLoaded, setHtml2CanvasLoaded] = useState(false);
   
   // Security State
   const [privacyMode, setPrivacyMode] = useState(true); 
@@ -52,11 +49,9 @@ const SeatingApp = () => {
   const [availableColumns, setAvailableColumns] = useState([]);
   const [groupByColumn, setGroupByColumn] = useState('');
 
-  // --- BRANDING CONSTANTS (MIT Sloan Guidelines) ---
-  const BRAND_RED = '#750014'; // Official MIT Red (PMS 202 C)
-  const BRAND_RED_HOVER = '#50000d'; // Darker shade for hover
-  const BRAND_SILVER = '#8B959E'; // MIT Silver Gray (PMS 7543)
-  const BRAND_LIGHT_GRAY = '#F2F4F8'; // MIT Light Gray 1
+  // MIT Brand Colors
+  const BRAND_RED = '#750014'; 
+  const BRAND_RED_HOVER = '#50000d';
 
   // Strategy Display Map
   const strategyDisplayNames = {
@@ -73,16 +68,45 @@ const SeatingApp = () => {
       setTimeout(() => setAnnouncement(''), 3000);
   };
 
+  // Security: Handle Session Clearing on Exit
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+        if (fileData.length > 0) {
+            e.preventDefault();
+            e.returnValue = ''; // Standard browser trigger for "Are you sure?" dialog
+        }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [fileData]);
+
+  // Load Fonts
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = '[https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap](https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap)';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }, []);
+
+  // Redirect from Layout tab if Groups Only is selected
+  useEffect(() => {
+    if (tableShape === 'groups' && activeTab === 'layout') {
+        setActiveTab('view');
+    }
+  }, [tableShape, activeTab]);
+
   // --- AI Logic ---
   const cleanDataWithGemini = async (rawData) => {
-    // Security Guard: Prevent execution if in Privacy Mode
+    // Security Guard
     if (privacyMode) {
         alert("Sensitive Data Protection is ENABLED. You must disable it in the top right to use AI features.");
         return rawData;
     }
 
     announce("Starting AI data cleaning. This may take a few seconds.");
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    
+    // PRODUCTION CONFIG: Read API Key from Environment Variable
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
     
     const systemPrompt = `You are a data cleaning assistant for a seating planner application.
     Your task is to process a list of guests and normalize specific fields while strictly preserving all other data.
@@ -143,7 +167,6 @@ const SeatingApp = () => {
     }
   };
 
-  // Keyboard support for file drop zone
   const handleDropZoneKeyDown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -168,7 +191,6 @@ const SeatingApp = () => {
 
   const handleProcessFile = async () => {
     if (!selectedFile) return;
-    if (!excelLibLoaded) { alert("Excel parser is still loading..."); return; }
 
     setIsProcessing(true);
     announce("Processing file...");
@@ -176,10 +198,12 @@ const SeatingApp = () => {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const bstr = evt.target.result;
-      const wb = window.XLSX.read(bstr, { type: 'binary' });
+      
+      // Use imported XLSX
+      const wb = XLSX.read(bstr, { type: 'binary' });
       const wsname = wb.SheetNames[0];
       const ws = wb.Sheets[wsname];
-      const data = window.XLSX.utils.sheet_to_json(ws);
+      const data = XLSX.utils.sheet_to_json(ws);
       
       if (data.length > 0) {
           const headers = Object.keys(data[0]);
@@ -200,15 +224,12 @@ const SeatingApp = () => {
             return newRow;
       });
 
-      // Security check for AI usage
       if (useAICleaning && !privacyMode) {
           setIsAICleaning(true);
           const rawPrepared = data.map(row => { const r = {}; Object.keys(row).forEach(k => r[k] = row[k]); return r; });
           const cleanedData = await cleanDataWithGemini(rawPrepared);
           finalData = cleanedData;
           setIsAICleaning(false);
-      } else if (useAICleaning && privacyMode) {
-          // If user tried to enable AI but Privacy Mode is on, skip silently or warn
       }
 
       setFileData(finalData);
@@ -221,7 +242,7 @@ const SeatingApp = () => {
 
   const handleRecleanData = async () => {
       if (privacyMode) {
-          alert("Please disable Sensitive Data Protection (top right) to use AI features. This involves sending data to cloud services.");
+          alert("Please disable Sensitive Data Protection (top right) to use AI features.");
           return;
       }
       if (isAICleaning || fileData.length === 0) return;
@@ -276,13 +297,14 @@ const SeatingApp = () => {
 
   const downloadTemplate = () => {
       const headers = ["First Name", "Last Name", "Dietary Restrictions", "Department", "Role", "Group"];
-      const ws = window.XLSX.utils.aoa_to_sheet([headers]);
-      const wb = window.XLSX.utils.book_new();
-      window.XLSX.utils.book_append_sheet(wb, ws, "Template");
-      window.XLSX.writeFile(wb, "Sloan_Guest_List_Template.xlsx");
+      // Use imported XLSX
+      const ws = XLSX.utils.aoa_to_sheet([headers]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Template");
+      XLSX.writeFile(wb, "Sloan_Guest_List_Template.xlsx");
   };
 
-  // --- Manual Drag & Drop & Keyboard Move Handlers ---
+  // --- Drag & Drop Handlers ---
   const handleGuestDragStart = (e, guest, sourceTableIndex, guestIndex) => {
       if (!isEditMode) return;
       setDraggedGuest({ guest, sourceTableIndex, guestIndex });
@@ -302,39 +324,29 @@ const SeatingApp = () => {
       setDraggedGuest(null);
   };
 
-  // Accessible move function for keyboard users
   const handleKeyboardMove = (guest, sourceTableIndex, guestIndex) => {
       const targetInput = window.prompt(`Move ${guest.name} to which table number? (1-${generatedTables.length})`);
       if (!targetInput) return;
-      
       const targetNum = parseInt(targetInput);
       if (isNaN(targetNum) || targetNum < 1 || targetNum > generatedTables.length) {
           alert("Invalid table number.");
           return;
       }
-      
-      const targetTableIndex = targetNum - 1;
-      moveGuest(guest, sourceTableIndex, guestIndex, targetTableIndex);
+      moveGuest(guest, sourceTableIndex, guestIndex, targetNum - 1);
   };
 
   const moveGuest = (guest, sourceTableIndex, guestIndex, targetTableIndex) => {
       const newTables = [...generatedTables];
       const sourceTable = newTables[sourceTableIndex];
       const targetTable = newTables[targetTableIndex];
-
-      // Remove from source
       sourceTable.guests.splice(guestIndex, 1);
-      
-      // Add to target
       targetTable.guests.push(guest);
 
-      // Re-calculate restrictions for both tables
       [sourceTable, targetTable].forEach(table => {
           const dietaryRestrictions = table.guests.filter(g => g.diet && g.diet.toLowerCase() !== 'none' && g.diet !== '');
           table.hasRestrictions = dietaryRestrictions.length > 0;
           table.restrictionsList = [...new Set(dietaryRestrictions.map(d => d.diet))];
           
-          // Logic for tagging group/separate attribute
           if ((seatingStrategy === 'group_attribute' || seatingStrategy === 'separate_attribute') && groupByColumn) {
                 const uniqueVals = [...new Set(table.guests.map(g => g.raw?.[groupByColumn]).filter(v => v !== undefined && v !== null && v !== ''))];
                 if (uniqueVals.length === 1) table.attributeTag = uniqueVals[0];
@@ -342,7 +354,6 @@ const SeatingApp = () => {
                 else table.attributeTag = null;
           }
       });
-
       setGeneratedTables(newTables);
       announce(`Moved ${guest.name} to Table ${targetTableIndex + 1}`);
   };
@@ -354,7 +365,6 @@ const SeatingApp = () => {
 
     let guests = [...sourceData].map(g => {
         const keys = Object.keys(g);
-        // Name Strategy
         const fNameKey = keys.find(k => (k.includes('first') && k.includes('name')) || k === 'fname' || k === 'forename' || k === 'first' || k === 'firstname');
         const lNameKey = keys.find(k => ((k.includes('last') && k.includes('name')) || k.includes('surname') || k === 'lname' || k === 'last' || k === 'lastname'));
         
@@ -366,7 +376,6 @@ const SeatingApp = () => {
             const nameKey = keys.find(k => k.includes('name') || k.includes('guest')) || keys[0];
             finalName = g[nameKey] || "Unknown Guest";
         }
-
         const dietKey = keys.find(k => k.includes('diet') || k.includes('restriction') || k.includes('allergy'));
         
         return {
@@ -397,22 +406,16 @@ const SeatingApp = () => {
             return 0;
         });
     } else if (seatingStrategy === 'separate_attribute' && groupByColumn) {
-        // Interleaving / Round-Robin Distribution for diversity
         const buckets = {};
         guests.forEach(g => {
             const val = (g.raw[groupByColumn] ?? "Unknown").toString();
             if (!buckets[val]) buckets[val] = [];
             buckets[val].push(g);
         });
-        
-        // Convert to array of arrays, sort by size to distribute largest groups first
         const bucketArrays = Object.values(buckets).sort((a, b) => b.length - a.length);
-        
         const distributedGuests = [];
         let index = 0;
         let active = true;
-        
-        // Pick one from each bucket round-robin style
         while(active) {
             active = false;
             for(let i=0; i<bucketArrays.length; i++) {
@@ -460,7 +463,6 @@ const SeatingApp = () => {
   const exportToExcel = () => {
     if (generatedTables.length === 0) return;
     const exportData = [];
-    
     generatedTables.forEach(table => {
         table.guests.forEach(guest => {
             const row = { "Table Number": table.id + 1, "Guest Name": guest.name };
@@ -471,23 +473,17 @@ const SeatingApp = () => {
             exportData.push(row);
         });
     });
-
-    const ws = window.XLSX.utils.json_to_sheet(exportData);
-    const wb = window.XLSX.utils.book_new();
-    window.XLSX.utils.book_append_sheet(wb, ws, "Seating Plan");
-    window.XLSX.writeFile(wb, "sloan_seating_plan.xlsx");
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Seating Plan");
+    XLSX.writeFile(wb, "sloan_seating_plan.xlsx");
     announce("Excel file exported.");
   };
 
   const exportToPDF = () => {
     if (generatedTables.length === 0) return;
-    if (!pdfLibLoaded || !window.jspdf) { alert("PDF generator loading..."); return; }
-
-    const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    // Brand RGB for #750014
     const brandRed = [117, 0, 20]; 
-
     doc.setFontSize(20);
     doc.setTextColor(...brandRed); 
     doc.text("Sloan SeatSmart Planner", 14, 22);
@@ -499,9 +495,7 @@ const SeatingApp = () => {
     if (eventType === 'meal') headRow.push("Dietary Restrictions");
     if ((seatingStrategy === 'group_attribute' || seatingStrategy === 'separate_attribute') && groupByColumn) headRow.push(groupByColumn);
     const head = [headRow];
-
     const tableRows = [];
-    
     generatedTables.forEach(table => {
         table.guests.forEach(guest => {
             const rowData = [`Table ${table.id + 1}`, guest.name];
@@ -527,42 +521,28 @@ const SeatingApp = () => {
   };
 
   const exportLayoutToPDF = async () => {
-    if (!layoutRef.current || !window.html2canvas || !window.jspdf) {
-        alert("PDF tools are loading...");
-        return;
-    }
-    
+    if (!layoutRef.current) return;
     setIsGeneratingLayoutPdf(true);
     announce("Generating layout PDF...");
-
     try {
-        // Wait a brief moment to ensure any rendering is complete
         await new Promise(resolve => setTimeout(resolve, 500));
-
-        const canvas = await window.html2canvas(layoutRef.current, {
+        const canvas = await html2canvas(layoutRef.current, {
             scale: 2, 
             useCORS: true,
             logging: false,
             backgroundColor: '#f1f5f9' 
         });
-        
         const imgData = canvas.toDataURL('image/png');
-        const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('l', 'mm', 'a4');
-        
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
-        
         const widthRatio = pageWidth / canvas.width;
         const heightRatio = pageHeight / canvas.height;
         const ratio = widthRatio > heightRatio ? heightRatio : widthRatio;
-        
         const canvasWidth = canvas.width * ratio;
         const canvasHeight = canvas.height * ratio;
-        
         const marginX = (pageWidth - canvasWidth) / 2;
         const marginY = (pageHeight - canvasHeight) / 2;
-
         pdf.addImage(imgData, 'PNG', marginX, marginY, canvasWidth, canvasHeight);
         pdf.save("sloan_room_layout.pdf");
         announce("Layout PDF exported.");
@@ -574,7 +554,7 @@ const SeatingApp = () => {
     }
   };
 
-  // --- Catering Stats ---
+  // --- Stats ---
   const cateringStats = useMemo(() => {
       if (generatedTables.length === 0) return {};
       const stats = {};
@@ -590,12 +570,7 @@ const SeatingApp = () => {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col" style={{fontFamily: "'Roboto', sans-serif"}}>
-      {/* Accessibility Live Region */}
-      <div aria-live="polite" className="sr-only">
-          {announcement}
-      </div>
-
-      {/* Header */}
+      <div aria-live="polite" className="sr-only">{announcement}</div>
       <header className="bg-[#750014] text-white p-6 shadow-lg sticky top-0 z-50" role="banner">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div 
@@ -614,12 +589,11 @@ const SeatingApp = () => {
           </div>
           <div className="flex items-center space-x-4">
              
-             {/* Security Indicator */}
              <button
                 onClick={() => {
                     const newMode = !privacyMode;
                     setPrivacyMode(newMode);
-                    setUseAICleaning(false); // Reset AI flag if switching modes
+                    setUseAICleaning(false);
                     announce(newMode ? "Sensitive Data Protection Enabled" : "Sensitive Data Protection Disabled");
                 }}
                 className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors focus-visible:ring-2 focus-visible:ring-white outline-none ${privacyMode ? 'bg-emerald-800 text-emerald-50 border border-emerald-500' : 'bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600'}`}
@@ -628,55 +602,35 @@ const SeatingApp = () => {
                 {privacyMode ? <ShieldCheck className="w-4 h-4 mr-1.5" /> : <Sparkles className="w-4 h-4 mr-1.5 text-yellow-400" />}
                 {privacyMode ? 'Sensitive Data: Protected' : 'AI Features: Enabled'}
              </button>
-
              <div className="text-red-100 text-sm hidden sm:block" aria-live="polite">
                 {fileData.length > 0 ? `${fileData.length} Guests` : ''}
             </div>
             {fileData.length > 0 && (
-                 <button 
-                    onClick={handleClear} 
-                    className="flex items-center px-3 py-1.5 bg-[#50000d] hover:bg-[#3d000a] rounded-md text-xs font-medium transition-colors border border-[#750014] focus-visible:ring-2 focus-visible:ring-white outline-none"
-                    aria-label="Start Over and Clear Data"
-                >
+                 <button onClick={handleClear} className="flex items-center px-3 py-1.5 bg-[#50000d] hover:bg-[#3d000a] rounded-md text-xs font-medium transition-colors border border-[#750014] focus-visible:ring-2 focus-visible:ring-white outline-none" aria-label="Start Over">
                     <Trash2 className="w-3 h-3 mr-1.5" aria-hidden="true" /> Start Over
                 </button>
             )}
           </div>
         </div>
       </header>
-
-      {/* Main Content */}
       <main className="max-w-6xl mx-auto p-6 flex-grow w-full" role="main">
-        
-        {/* Interactive Progress Stepper */}
         <nav aria-label="Progress Steps" className="flex justify-center mb-8">
             <ol className="flex items-center space-x-4 list-none">
-                <li>
-                    <StepButton icon={Upload} label="1. Upload" isActive={activeTab === 'upload'} onClick={() => setActiveTab('upload')} />
-                </li>
+                <li><StepButton icon={Upload} label="1. Upload" isActive={activeTab === 'upload'} onClick={() => setActiveTab('upload')} /></li>
                 <li aria-hidden="true" className={`w-12 h-0.5 ${fileData.length > 0 ? 'bg-[#750014]' : 'bg-slate-300'}`} />
-                <li>
-                    <StepButton icon={Settings} label="2. Configure" isActive={activeTab === 'config'} disabled={fileData.length === 0} onClick={() => setActiveTab('config')} />
-                </li>
+                <li><StepButton icon={Settings} label="2. Configure" isActive={activeTab === 'config'} disabled={fileData.length === 0} onClick={() => setActiveTab('config')} /></li>
                 <li aria-hidden="true" className={`w-12 h-0.5 ${generatedTables.length > 0 ? 'bg-[#750014]' : 'bg-slate-300'}`} />
-                <li>
-                    <StepButton icon={TableIcon} label="3. Visualize" isActive={activeTab === 'view'} disabled={generatedTables.length === 0} onClick={() => setActiveTab('view')} />
-                </li>
-                
-                {/* Only show Layout tab if NOT in Groups mode */}
+                <li><StepButton icon={TableIcon} label="3. Visualize" isActive={activeTab === 'view'} disabled={generatedTables.length === 0} onClick={() => setActiveTab('view')} /></li>
                 {tableShape !== 'groups' && (
                     <>
                         <li aria-hidden="true" className={`w-12 h-0.5 ${generatedTables.length > 0 ? 'bg-[#750014]' : 'bg-slate-300'}`} />
-                        <li>
-                            <StepButton icon={Map} label="4. Layout" isActive={activeTab === 'layout'} disabled={generatedTables.length === 0} onClick={() => setActiveTab('layout')} />
-                        </li>
+                        <li><StepButton icon={Map} label="4. Layout" isActive={activeTab === 'layout'} disabled={generatedTables.length === 0} onClick={() => setActiveTab('layout')} /></li>
                     </>
                 )}
             </ol>
         </nav>
 
         <div className="bg-white rounded-sm shadow-md border border-slate-200 min-h-[500px] overflow-hidden">
-            
             {/* View: Upload */}
             {activeTab === 'upload' && (
                 <section className="p-12 flex flex-col items-center text-center justify-center h-full space-y-6" aria-label="Upload Section">
@@ -702,39 +656,16 @@ const SeatingApp = () => {
                                     Recommended limit: 300 guests for optimal performance.
                                 </p>
                             </div>
-
                             <div role="radiogroup" aria-label="Event Type" className="w-full max-w-md my-4 grid grid-cols-2 gap-4">
-                                <button 
-                                    onClick={() => setEventType('meal')} 
-                                    className={`p-3 rounded-lg border flex flex-col items-center justify-center transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${eventType === 'meal' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                                    aria-checked={eventType === 'meal'}
-                                    role="radio"
-                                >
-                                    <Utensils className="w-6 h-6 mb-2" aria-hidden="true" />
-                                    <span className="font-bold text-sm">Seated Meal</span>
-                                    <span className="text-xs opacity-70 mt-1">Tracks diets</span>
+                                <button onClick={() => setEventType('meal')} className={`p-3 rounded-lg border flex flex-col items-center justify-center transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${eventType === 'meal' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`} aria-checked={eventType === 'meal'} role="radio">
+                                    <Utensils className="w-6 h-6 mb-2" aria-hidden="true" /><span className="font-bold text-sm">Seated Meal</span><span className="text-xs opacity-70 mt-1">Tracks diets</span>
                                 </button>
-                                <button 
-                                    onClick={() => setEventType('workshop')} 
-                                    className={`p-3 rounded-lg border flex flex-col items-center justify-center transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${eventType === 'workshop' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                                    aria-checked={eventType === 'workshop'}
-                                    role="radio"
-                                >
-                                    <Briefcase className="w-6 h-6 mb-2" aria-hidden="true" />
-                                    <span className="font-bold text-sm">Workshop / Class</span>
-                                    <span className="text-xs opacity-70 mt-1">Groups only</span>
+                                <button onClick={() => setEventType('workshop')} className={`p-3 rounded-lg border flex flex-col items-center justify-center transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${eventType === 'workshop' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`} aria-checked={eventType === 'workshop'} role="radio">
+                                    <Briefcase className="w-6 h-6 mb-2" aria-hidden="true" /><span className="font-bold text-sm">Workshop / Class</span><span className="text-xs opacity-70 mt-1">Groups only</span>
                                 </button>
                             </div>
-                            
                             <div className={`bg-slate-50 border border-slate-200 p-4 rounded-lg flex items-center space-x-3 max-w-md w-full transition-opacity ${privacyMode ? 'opacity-50 cursor-not-allowed' : 'opacity-100'}`}>
-                                <button 
-                                    onClick={() => !privacyMode && setUseAICleaning(!useAICleaning)} 
-                                    disabled={privacyMode}
-                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#750014] ${useAICleaning ? 'bg-[#750014]' : 'bg-slate-300'} disabled:cursor-not-allowed`}
-                                    role="switch"
-                                    aria-checked={useAICleaning}
-                                    aria-label="Clean Data with AI Toggle"
-                                >
+                                <button onClick={() => !privacyMode && setUseAICleaning(!useAICleaning)} disabled={privacyMode} className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#750014] ${useAICleaning ? 'bg-[#750014]' : 'bg-slate-300'} disabled:cursor-not-allowed`} role="switch" aria-checked={useAICleaning} aria-label="Clean Data with AI Toggle">
                                     <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${useAICleaning ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
                                 <div className="flex-1 text-left" onClick={() => !privacyMode && setUseAICleaning(!useAICleaning)}>
@@ -744,48 +675,22 @@ const SeatingApp = () => {
                                     <p className="text-xs text-slate-500">{privacyMode ? 'Disabled in Protected Mode' : 'Fix typos and standardize formats.'}</p>
                                 </div>
                             </div>
-
                             <div className="flex flex-col space-y-4 w-full max-w-md relative">
-                                <label 
-                                    htmlFor="file-upload"
-                                    onDragOver={handleDragOverFile}
-                                    onDragLeave={handleDragLeaveFile}
-                                    onDrop={handleDropFile}
-                                    onKeyDown={handleDropZoneKeyDown}
-                                    tabIndex="0"
-                                    className={`flex flex-col items-center px-4 py-8 bg-white rounded-lg shadow-sm tracking-wide uppercase border-2 border-dashed cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#750014] ${isDraggingFile ? 'border-[#750014] bg-red-50 scale-105' : selectedFile ? 'border-green-400 bg-green-50 text-green-700' : 'border-slate-300 text-slate-400 hover:bg-slate-50'}`}
-                                    role="button"
-                                    aria-label="File Upload Drop Zone"
-                                >
+                                <label htmlFor="file-upload" onDragOver={handleDragOverFile} onDragLeave={handleDragLeaveFile} onDrop={handleDropFile} onKeyDown={handleDropZoneKeyDown} tabIndex="0" className={`flex flex-col items-center px-4 py-8 bg-white rounded-lg shadow-sm tracking-wide uppercase border-2 border-dashed cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A31F34] ${isDraggingFile ? 'border-[#A31F34] bg-red-50 scale-105' : selectedFile ? 'border-green-400 bg-green-50 text-green-700' : 'border-slate-300 text-slate-400 hover:bg-slate-50'}`} role="button" aria-label="File Upload Drop Zone">
                                     {selectedFile ? <FileSpreadsheet className="w-10 h-10 text-green-600 mb-2" aria-hidden="true" /> : <Upload className="w-10 h-10 mb-2" aria-hidden="true" />}
                                     <span className="mt-2 text-base leading-normal text-center break-all font-semibold">{fileName || 'Drag & Drop or Select File'}</span>
-                                    <input 
-                                        id="file-upload" 
-                                        ref={fileInputRef}
-                                        type='file' 
-                                        className="hidden" 
-                                        accept=".xlsx, .xls, .csv" 
-                                        onChange={handleFileSelect} 
-                                    />
+                                    <input id="file-upload" ref={fileInputRef} type='file' className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileSelect} />
                                 </label>
-                                
                                 {selectedFile && (
                                     <button onClick={handleProcessFile} className="w-full py-3 px-4 bg-[#750014] hover:bg-[#50000d] text-white font-bold rounded-lg shadow-lg transform transition-all active:scale-95 flex items-center justify-center animate-in fade-in slide-in-from-bottom-2 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#750014] outline-none">
                                         <ArrowRight className="w-5 h-5 mr-2" aria-hidden="true" /> Process Guest List {useAICleaning && !privacyMode && "& Clean Data"}
                                     </button>
                                 )}
-
-                                <div className="relative flex py-2 items-center">
-                                    <div className="flex-grow border-t border-slate-200"></div>
-                                    <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">Or try it out</span>
-                                    <div className="flex-grow border-t border-slate-200"></div>
-                                </div>
-
-                                <div className="flex gap-2">
-                                    <button onClick={loadSampleData} className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors flex items-center justify-center space-x-2 focus-visible:ring-2 focus-visible:ring-[#750014] outline-none">
+                                <div className="flex gap-2 justify-center w-full max-w-md">
+                                    <button onClick={loadSampleData} className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors flex items-center justify-center space-x-2 focus-visible:ring-2 focus-visible:ring-[#750014] outline-none">
                                         <Download className="w-4 h-4" aria-hidden="true" /> <span>Sample Data</span>
                                     </button>
-                                    <button onClick={downloadTemplate} className="w-full py-3 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium rounded-lg transition-colors flex items-center justify-center space-x-2 focus-visible:ring-2 focus-visible:ring-[#750014] outline-none">
+                                    <button onClick={downloadTemplate} className="flex-1 py-3 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium rounded-lg transition-colors flex items-center justify-center space-x-2 focus-visible:ring-2 focus-visible:ring-[#750014] outline-none">
                                         <FileDown className="w-4 h-4" aria-hidden="true" /> <span>Download Template</span>
                                     </button>
                                 </div>
@@ -795,10 +700,9 @@ const SeatingApp = () => {
                 </section>
             )}
 
-            {/* View: Configuration */}
+            {/* View: Config */}
             {activeTab === 'config' && (
                 <section className="p-8" aria-label="Configuration">
-                    {/* ... Configuration UI ... */}
                     <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
                         <h2 className="text-2xl font-bold text-slate-800">Seating Parameters</h2>
                         <div className="flex items-center space-x-2">
@@ -808,60 +712,29 @@ const SeatingApp = () => {
                             </span>
                         </div>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                         <div className="space-y-8">
                             <div>
                                 <label htmlFor="table-size-slider" className="block text-sm font-bold text-slate-700 mb-2 flex justify-between">
-                                    <span>Guests per Table</span>
-                                    <span className="text-[#750014]">{tableSize}</span>
+                                    <span>Guests per Table</span><span className="text-[#750014]">{tableSize}</span>
                                 </label>
-                                <input 
-                                    id="table-size-slider"
-                                    type="range" 
-                                    min="2" 
-                                    max="12" 
-                                    step="1" 
-                                    value={tableSize} 
-                                    onChange={(e) => setTableSize(e.target.value)} 
-                                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#750014] focus-visible:ring-2 focus-visible:ring-[#750014] outline-none" 
-                                    aria-valuemin="2"
-                                    aria-valuemax="12"
-                                    aria-valuenow={tableSize}
-                                />
+                                <input id="table-size-slider" type="range" min="2" max="12" step="1" value={tableSize} onChange={(e) => setTableSize(e.target.value)} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#750014] focus-visible:ring-2 focus-visible:ring-[#750014] outline-none" aria-valuemin="2" aria-valuemax="12" aria-valuenow={tableSize} />
                                 <div className="flex justify-between text-xs text-slate-400 mt-2" aria-hidden="true"><span>2 Seats</span><span>12 Seats</span></div>
                             </div>
-
                             <div>
                                 <label className="block text-sm font-bold text-slate-700 mb-2">Table Shape</label>
                                 <div role="radiogroup" aria-label="Table Shape" className="grid grid-cols-3 gap-3 mb-6">
-                                    <button 
-                                        onClick={() => setTableShape('round')} 
-                                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${tableShape === 'round' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                                        role="radio"
-                                        aria-checked={tableShape === 'round'}
-                                    >
+                                    <button onClick={() => setTableShape('round')} className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${tableShape === 'round' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`} role="radio" aria-checked={tableShape === 'round'}>
                                         <Circle className="w-6 h-6 mb-1" aria-hidden="true" /><span className="text-xs font-medium">Round</span>
                                     </button>
-                                    <button 
-                                        onClick={() => setTableShape('rectangle')} 
-                                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${tableShape === 'rectangle' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                                        role="radio"
-                                        aria-checked={tableShape === 'rectangle'}
-                                    >
+                                    <button onClick={() => setTableShape('rectangle')} className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${tableShape === 'rectangle' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`} role="radio" aria-checked={tableShape === 'rectangle'}>
                                         <Square className="w-6 h-6 mb-1" aria-hidden="true" /><span className="text-xs font-medium">Rectangle</span>
                                     </button>
-                                    <button 
-                                        onClick={() => setTableShape('groups')} 
-                                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${tableShape === 'groups' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                                        role="radio"
-                                        aria-checked={tableShape === 'groups'}
-                                    >
+                                    <button onClick={() => setTableShape('groups')} className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${tableShape === 'groups' ? 'bg-red-50 border-[#750014] text-[#750014]' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`} role="radio" aria-checked={tableShape === 'groups'}>
                                         <Users className="w-6 h-6 mb-1" aria-hidden="true" /><span className="text-xs font-medium">Groups Only</span>
                                     </button>
                                 </div>
                             </div>
-
                             <div>
                                 <label className="block text-sm font-bold text-slate-700 mb-4">Seating Strategy</label>
                                 <div role="radiogroup" aria-label="Seating Strategy" className="grid grid-cols-1 gap-3">
@@ -869,16 +742,10 @@ const SeatingApp = () => {
                                     {eventType === 'meal' && (<StrategyOption active={seatingStrategy === 'group_diet'} onClick={() => setSeatingStrategy('group_diet')} title="Group by Diet" desc="Group similar dietary needs together." icon={Utensils} />)}
                                     <StrategyOption active={seatingStrategy === 'group_attribute'} onClick={() => setSeatingStrategy('group_attribute')} title="Group by Attribute" desc="Group by Department, Team, etc." icon={ListFilter} />
                                     <StrategyOption active={seatingStrategy === 'separate_attribute'} onClick={() => setSeatingStrategy('separate_attribute')} title="Separate by Attribute" desc="Distribute evenly to maximize diversity." icon={Shuffle} />
-                                    
                                     {(seatingStrategy === 'group_attribute' || seatingStrategy === 'separate_attribute') && (
                                         <div className="ml-4 mt-2 p-3 bg-slate-50 border-l-4 border-[#750014] animate-in slide-in-from-left-2">
                                             <label htmlFor="group-column-select" className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Column</label>
-                                            <select 
-                                                id="group-column-select"
-                                                value={groupByColumn} 
-                                                onChange={(e) => setGroupByColumn(e.target.value)} 
-                                                className="w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-[#750014] outline-none"
-                                            >
+                                            <select id="group-column-select" value={groupByColumn} onChange={(e) => setGroupByColumn(e.target.value)} className="w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-[#750014] outline-none">
                                                 {availableColumns.map(col => <option key={col} value={col}>{col}</option>)}
                                             </select>
                                         </div>
@@ -887,7 +754,6 @@ const SeatingApp = () => {
                                 </div>
                             </div>
                         </div>
-
                         <div className="bg-slate-50 rounded-xl p-6 border border-slate-200 h-fit">
                             <h3 className="text-lg font-bold text-slate-700 mb-4">Projected Layout</h3>
                             <div className="space-y-4">
@@ -925,32 +791,18 @@ const SeatingApp = () => {
                                 <h2 className="text-2xl font-bold text-slate-800">Seating Plan</h2>
                                 <p className="text-slate-500">{generatedTables.length} tables generated for {fileData.length} guests</p>
                             </div>
-                            
-                            {/* Search Bar */}
                             <div className="relative group w-full sm:w-64">
                                 <label htmlFor="guest-search" className="sr-only">Search Guest Name</label>
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Search className="h-4 w-4 text-slate-400 group-focus-within:text-[#750014]" aria-hidden="true" />
                                 </div>
-                                <input
-                                    id="guest-search"
-                                    type="text"
-                                    placeholder="Search guest name..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg leading-5 bg-white placeholder-slate-400 focus:outline-none focus:border-[#750014] focus:ring-1 focus:ring-[#750014] sm:text-sm transition-colors"
-                                />
+                                <input id="guest-search" type="text" placeholder="Search guest name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg leading-5 bg-white placeholder-slate-400 focus:outline-none focus:border-[#750014] focus:ring-1 focus:ring-[#750014] sm:text-sm transition-colors" />
                             </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2 w-full xl:w-auto justify-end">
-                            {/* Editing Tools Group */}
                             <div className="flex space-x-1 border-r border-slate-200 pr-2 mr-1">
-                                <button 
-                                    onClick={() => setIsEditMode(!isEditMode)} 
-                                    className={`px-3 py-2 border rounded-lg font-medium flex items-center text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${isEditMode ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-300 text-slate-600'}`}
-                                    aria-pressed={isEditMode}
-                                >
+                                <button onClick={() => setIsEditMode(!isEditMode)} className={`px-3 py-2 border rounded-lg font-medium flex items-center text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${isEditMode ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-300 text-slate-600'}`} aria-pressed={isEditMode}>
                                     {isEditMode ? <Unlock className="w-4 h-4 mr-1.5" aria-hidden="true" /> : <Lock className="w-4 h-4 mr-1.5" aria-hidden="true" />}
                                     {isEditMode ? 'Finish' : 'Edit'}
                                 </button>
@@ -958,29 +810,14 @@ const SeatingApp = () => {
                                     <Shuffle className="w-4 h-4" aria-hidden="true" />
                                 </button>
                             </div>
-
-                            {/* Data Tools */}
-                            <button 
-                                onClick={handleRecleanData} 
-                                disabled={isAICleaning || privacyMode} 
-                                className={`px-3 py-2 border rounded-lg font-medium flex items-center text-sm focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${privacyMode ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'}`}
-                                title={privacyMode ? "Disabled in Protected Mode" : "Clean Data with AI"}
-                            >
+                            <button onClick={handleRecleanData} disabled={isAICleaning || privacyMode} className={`px-3 py-2 border rounded-lg font-medium flex items-center text-sm focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${privacyMode ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'}`} title={privacyMode ? "Disabled in Protected Mode" : "Clean Data with AI"}>
                                 <Sparkles className="w-4 h-4 mr-1.5" aria-hidden="true" /> AI Clean
                             </button>
-                            
                             <button onClick={() => setActiveTab('config')} className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 flex items-center text-sm focus-visible:ring-2 focus-visible:ring-[#750014] outline-none">
                                 <RefreshCw className="w-4 h-4 mr-1.5" aria-hidden="true" /> Reconfigure
                             </button>
-
-                            {/* Export Dropdown */}
                             <div className="relative">
-                                <button 
-                                    onClick={() => setShowExportMenu(!showExportMenu)} 
-                                    className="px-3 py-2 bg-[#750014] hover:bg-[#50000d] text-white rounded-lg text-sm font-medium flex items-center shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#750014] outline-none"
-                                    aria-expanded={showExportMenu}
-                                    aria-haspopup="true"
-                                >
+                                <button onClick={() => setShowExportMenu(!showExportMenu)} className="px-3 py-2 bg-[#750014] hover:bg-[#50000d] text-white rounded-lg text-sm font-medium flex items-center shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#750014] outline-none" aria-expanded={showExportMenu} aria-haspopup="true">
                                     <Download className="w-4 h-4 mr-1.5" aria-hidden="true" /> Export <ChevronDown className="w-3 h-3 ml-1" aria-hidden="true" />
                                 </button>
                                 {showExportMenu && (
@@ -1006,7 +843,6 @@ const SeatingApp = () => {
                         </div>
                     )}
 
-                    {/* Quick Stats Bar for Meals */}
                     {eventType === 'meal' && Object.keys(cateringStats).length > 0 && (
                         <div className="mb-8 p-4 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center" aria-label="Catering Summary">
                             <div className="flex items-center text-slate-500 text-sm font-semibold border-r border-slate-200 pr-4">
@@ -1023,45 +859,24 @@ const SeatingApp = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 print:grid-cols-2">
                         {generatedTables.map((table, idx) => (
-                            <TableCard 
-                                key={idx} 
-                                tableIndex={idx}
-                                tableNumber={table.id + 1} 
-                                data={table} 
-                                groupByColumn={groupByColumn}
-                                seatingStrategy={seatingStrategy}
-                                eventType={eventType}
-                                tableShape={tableShape}
-                                isEditMode={isEditMode}
-                                onGuestDragStart={handleGuestDragStart}
-                                onTableDragOver={handleTableDragOver}
-                                onGuestDrop={handleGuestDrop}
-                                onGuestKeyboardMove={handleKeyboardMove}
-                                searchQuery={searchQuery}
-                                capacity={tableSize}
-                            />
+                            <TableCard key={idx} tableIndex={idx} tableNumber={table.id + 1} data={table} groupByColumn={groupByColumn} seatingStrategy={seatingStrategy} eventType={eventType} tableShape={tableShape} isEditMode={isEditMode} onGuestDragStart={handleGuestDragStart} onTableDragOver={handleTableDragOver} onGuestDrop={handleGuestDrop} onGuestKeyboardMove={handleKeyboardMove} searchQuery={searchQuery} capacity={tableSize} />
                         ))}
                     </div>
                 </section>
             )}
 
-            {/* View: Room Layout (New Tab) */}
+            {/* View: Room Layout */}
             {activeTab === 'layout' && (
                 <section className="bg-slate-100 min-h-[600px] flex flex-col" aria-label="Room Layout">
                     <div className="p-6 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-40">
                         <h2 className="text-2xl font-bold text-slate-800">Room Layout Visualization</h2>
                         <div className="flex gap-2">
-                             <button 
-                                onClick={exportLayoutToPDF} 
-                                disabled={isGeneratingLayoutPdf}
-                                className="px-3 py-2 bg-[#750014] text-white rounded-lg text-sm font-medium hover:bg-[#50000d] flex items-center shadow-sm disabled:opacity-70 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#750014] outline-none"
-                            >
+                             <button onClick={exportLayoutToPDF} disabled={isGeneratingLayoutPdf} className="px-3 py-2 bg-[#750014] text-white rounded-lg text-sm font-medium hover:bg-[#50000d] flex items-center shadow-sm disabled:opacity-70 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#750014] outline-none">
                                 {isGeneratingLayoutPdf ? <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" /> : <FileText className="w-4 h-4 mr-2" aria-hidden="true" />}
                                 {isGeneratingLayoutPdf ? 'Generating...' : 'Export PDF'}
                             </button>
                         </div>
                     </div>
-                    
                     <div className="p-8 overflow-auto flex-grow">
                         <div ref={layoutRef} className="bg-slate-100 p-8 min-w-max">
                             <RoomLayoutView tables={generatedTables} shape={tableShape} />
@@ -1070,63 +885,38 @@ const SeatingApp = () => {
                 </section>
             )}
         </div>
-        
-        {/* Footer */}
-        <footer className="mt-12 py-6 text-center text-slate-400 text-sm border-t border-slate-200" role="contentinfo">
-            <p className="font-medium text-slate-500">MIT Sloan School of Management</p>
-            <p className="text-xs mt-1">© {new Date().getFullYear()} SeatSmart Planner</p>
-        </footer>
       </main>
     </div>
   );
 };
 
-// --- Sub-components ---
-
-// Room Layout Component
+// --- Sub-components (TableCard, RoomLayoutView, etc.) from previous steps ---
 const RoomLayoutView = ({ tables, shape }) => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16 print:grid-cols-2">
             {tables.map((table, i) => (
                 <div key={i} className="flex flex-col items-center break-inside-avoid">
-                    {/* Increased container size to w-80 h-80 (320px) to accommodate wider radius */}
                     <div className="relative w-80 h-80 flex items-center justify-center mb-8">
-                        {/* The Table Surface */}
-                        <div className={`
-                            absolute flex items-center justify-center bg-white border-2 border-slate-300 shadow-md z-10
-                            ${shape === 'rectangle' ? 'w-40 h-24 rounded-md' : 'w-32 h-32 rounded-full'}
-                        `}>
+                        <div className={`absolute flex items-center justify-center bg-white border-2 border-slate-300 shadow-md z-10 ${shape === 'rectangle' ? 'w-40 h-24 rounded-md' : 'w-32 h-32 rounded-full'}`}>
                             <div className="text-center">
                                 <div className="font-bold text-slate-700 text-lg">Table {table.id + 1}</div>
                                 {table.attributeTag && <div className="text-[10px] text-[#750014] uppercase font-bold tracking-wider px-2">{table.attributeTag}</div>}
                             </div>
                         </div>
-
-                        {/* The Guests (Chairs) */}
                         {table.guests.map((guest, idx) => {
                             const total = table.guests.length;
-                            
-                            // Positioning Logic
                             let style = {};
                             if (shape === 'rectangle') {
-                                // Elliptical distribution to match rectangle shape and clear the w-40 (160px) width
-                                const angle = (idx / total) * 2 * Math.PI - (Math.PI / 2); // Start top
-                                const xRadius = 140; // Wider horizontal spread
-                                const yRadius = 100; // Taller vertical spread
-                                const x = Math.cos(angle) * xRadius;
-                                const y = Math.sin(angle) * yRadius;
+                                const angle = (idx / total) * 2 * Math.PI - (Math.PI / 2);
+                                const xRadius = 140; const yRadius = 100;
+                                const x = Math.cos(angle) * xRadius; const y = Math.sin(angle) * yRadius;
                                 style = { transform: `translate(${x}px, ${y}px)` };
-
                             } else {
-                                // Circle Logic
-                                const angle = (idx / total) * 2 * Math.PI - (Math.PI / 2); // Start top
-                                // Increased radius from 100 to 125 to ensure nameplates don't overlap the table
-                                const radius = 125; // Distance from center
-                                const x = Math.cos(angle) * radius;
-                                const y = Math.sin(angle) * radius;
+                                const angle = (idx / total) * 2 * Math.PI - (Math.PI / 2);
+                                const radius = 125;
+                                const x = Math.cos(angle) * radius; const y = Math.sin(angle) * radius;
                                 style = { transform: `translate(${x}px, ${y}px)` };
                             }
-
                             return (
                                 <div key={idx} className="absolute flex flex-col items-center justify-center w-24" style={style}>
                                     <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center mb-1 shadow-sm text-xs font-bold text-slate-500 z-30 relative">
@@ -1146,103 +936,47 @@ const RoomLayoutView = ({ tables, shape }) => {
 };
 
 const StepButton = ({ icon: Icon, label, isActive, disabled, onClick }) => (
-    <button 
-        disabled={disabled}
-        onClick={onClick}
-        className={`flex items-center px-4 py-2 rounded-full transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${
-            isActive 
-            ? 'bg-[#750014] text-white shadow-md' 
-            : disabled 
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-        }`}
-        aria-current={isActive ? 'step' : undefined}
-    >
-        <Icon className="w-4 h-4 mr-2" aria-hidden="true" />
-        <span className="font-medium text-sm">{label}</span>
+    <button disabled={disabled} onClick={onClick} className={`flex items-center px-4 py-2 rounded-full transition-all focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${isActive ? 'bg-[#750014] text-white shadow-md' : disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`} aria-current={isActive ? 'step' : undefined}>
+        <Icon className="w-4 h-4 mr-2" aria-hidden="true" /> <span className="font-medium text-sm">{label}</span>
     </button>
 );
 
 const StrategyOption = ({ active, onClick, title, desc, icon: Icon }) => (
-    <button 
-        onClick={onClick}
-        className={`p-3 rounded-lg border text-left transition-all flex items-start focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${active ? 'border-[#750014] bg-red-50' : 'border-slate-200 hover:border-slate-300'}`}
-        role="radio"
-        aria-checked={active}
-    >
+    <button onClick={onClick} className={`p-3 rounded-lg border text-left transition-all flex items-start focus-visible:ring-2 focus-visible:ring-[#750014] outline-none ${active ? 'border-[#750014] bg-red-50' : 'border-slate-200 hover:border-slate-300'}`} role="radio" aria-checked={active}>
         {Icon && <Icon className={`w-5 h-5 mr-3 mt-0.5 ${active ? 'text-[#750014]' : 'text-slate-400'}`} aria-hidden="true" />}
-        <div>
-            <div className={`font-bold ${active ? 'text-[#750014]' : 'text-slate-800'}`}>{title}</div>
-            <div className="text-sm text-slate-500 mt-1">{desc}</div>
-        </div>
+        <div><div className={`font-bold ${active ? 'text-[#750014]' : 'text-slate-800'}`}>{title}</div><div className="text-sm text-slate-500 mt-1">{desc}</div></div>
     </button>
 );
 
 const StatRow = ({ label, value }) => (
-    <div className="flex justify-between items-center pb-3 border-b border-slate-200 last:border-0">
-        <span className="text-slate-500">{label}</span>
-        <span className="font-bold text-slate-800">{value}</span>
-    </div>
+    <div className="flex justify-between items-center pb-3 border-b border-slate-200 last:border-0"><span className="text-slate-500">{label}</span><span className="font-bold text-slate-800">{value}</span></div>
 );
 
 const TableCard = ({ tableNumber, tableIndex, data, groupByColumn, seatingStrategy, eventType, tableShape, isEditMode, onGuestDragStart, onTableDragOver, onGuestDrop, onGuestKeyboardMove, searchQuery, capacity }) => {
     const isRound = tableShape === 'round';
     const isGroups = tableShape === 'groups';
     const isOverCapacity = data.guests.length > capacity;
-    
     let containerClasses = "bg-white overflow-hidden flex flex-col h-full break-inside-avoid transition-all";
     if (isGroups) containerClasses += " border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50";
-    else {
-        containerClasses += " rounded-xl shadow-sm border-2";
-        if (data.hasRestrictions && eventType === 'meal') containerClasses += " border-amber-400";
-        else containerClasses += " border-transparent";
-    }
+    else { containerClasses += " rounded-xl shadow-sm border-2"; if (data.hasRestrictions && eventType === 'meal') containerClasses += " border-amber-400"; else containerClasses += " border-transparent"; }
 
     return (
-        <article 
-            className={containerClasses}
-            onDragOver={isEditMode ? onTableDragOver : undefined}
-            onDrop={isEditMode ? (e) => onGuestDrop(e, tableIndex) : undefined}
-            aria-label={`Table ${tableNumber}, ${data.guests.length} guests`}
-        >
+        <article className={containerClasses} onDragOver={isEditMode ? onTableDragOver : undefined} onDrop={isEditMode ? (e) => onGuestDrop(e, tableIndex) : undefined} aria-label={`Table ${tableNumber}, ${data.guests.length} guests`}>
             <div className={`p-3 flex justify-between items-center ${isGroups ? 'bg-transparent' : (data.hasRestrictions && eventType === 'meal' ? 'bg-amber-50' : 'bg-slate-100')}`}>
                 <div className="flex items-center">
-                    <div className={`w-8 h-8 flex items-center justify-center font-bold text-[#750014] mr-3 shadow-sm bg-white border border-slate-200 ${isRound ? 'rounded-full' : 'rounded-md'}`}>
-                        {tableNumber}
-                    </div>
+                    <div className={`w-8 h-8 flex items-center justify-center font-bold text-[#750014] mr-3 shadow-sm bg-white border border-slate-200 ${isRound ? 'rounded-full' : 'rounded-md'}`}>{tableNumber}</div>
                     <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-slate-700 text-base m-0">
-                                {isGroups ? `Group ${tableNumber}` : `Table ${tableNumber}`}
-                            </h3>
-                            {/* Capacity Counter */}
-                            <span 
-                                className={`text-xs font-medium px-1.5 py-0.5 rounded ${isOverCapacity ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-600'}`}
-                                aria-label={`${data.guests.length} of ${capacity} seats filled`}
-                            >
-                                {data.guests.length}/{capacity}
-                            </span>
-                        </div>
-                        {data.attributeTag && (
-                             <span 
-                                title={data.attributeTag} 
-                                className="text-xs text-[#750014] font-semibold uppercase tracking-wider line-clamp-1 max-w-[140px] cursor-help"
-                             >
-                                {data.attributeTag}
-                             </span>
-                        )}
+                        <div className="flex items-center gap-2"><h3 className="font-bold text-slate-700 text-base m-0">{isGroups ? `Group ${tableNumber}` : `Table ${tableNumber}`}</h3><span className={`text-xs font-medium px-1.5 py-0.5 rounded ${isOverCapacity ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-600'}`} aria-label={`${data.guests.length} of ${capacity} seats filled`}>{data.guests.length}/{capacity}</span></div>
+                        {data.attributeTag && <span title={data.attributeTag} className="text-xs text-[#750014] font-semibold uppercase tracking-wider line-clamp-1 max-w-[140px] cursor-help">{data.attributeTag}</span>}
                     </div>
                 </div>
                 {data.hasRestrictions && eventType === 'meal' && !isGroups && (
                     <div className="group relative">
                         <AlertCircle className="w-5 h-5 text-amber-500 cursor-help" aria-label="Dietary restriction warning" />
-                        <div className="absolute right-0 top-6 w-48 bg-slate-800 text-white text-xs p-2 rounded z-10 hidden group-hover:block" role="tooltip">
-                            Dietary needs: {data.restrictionsList.join(', ')}
-                        </div>
+                        <div className="absolute right-0 top-6 w-48 bg-slate-800 text-white text-xs p-2 rounded z-10 hidden group-hover:block" role="tooltip">Dietary needs: {data.restrictionsList.join(', ')}</div>
                     </div>
                 )}
             </div>
-            
             <div className={`p-4 flex-grow ${isEditMode ? 'bg-orange-50/30' : ''}`}>
                 <ul className="space-y-3 list-none p-0 m-0">
                     {data.guests.map((guest, i) => {
@@ -1251,57 +985,21 @@ const TableCard = ({ tableNumber, tableIndex, data, groupByColumn, seatingStrate
                             const val = guest.raw[groupByColumn];
                             if (val !== undefined && val !== null) attributeValue = val;
                         }
-
-                        // Search Highlighting
                         const isMatch = searchQuery && guest.name.toLowerCase().includes(searchQuery.toLowerCase());
                         const isDimmed = searchQuery && !isMatch;
-
                         return (
-                        <li 
-                            key={i} 
-                            className={`flex items-start text-sm p-2 rounded-md transition-all 
-                                ${isEditMode ? 'cursor-grab hover:bg-white hover:shadow-md border border-transparent hover:border-orange-200 active:cursor-grabbing' : ''}
-                                ${isMatch ? 'bg-yellow-100 border border-yellow-300 ring-2 ring-yellow-200' : ''}
-                                ${isDimmed ? 'opacity-25 blur-[0.5px]' : 'opacity-100'}
-                            `}
-                            draggable={isEditMode}
-                            onDragStart={(e) => onGuestDragStart(e, guest, tableIndex, i)}
-                        >
-                            {isEditMode ? (
-                                <button 
-                                    onClick={() => onGuestKeyboardMove(guest, tableIndex, i)}
-                                    className="p-1 -ml-1 mr-1 text-orange-400 hover:text-orange-600 hover:bg-orange-100 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                    aria-label={`Move ${guest.name} to another table`}
-                                >
-                                    <Move className="w-4 h-4" aria-hidden="true" />
-                                </button>
-                            ) : (
-                                <User className="w-4 h-4 text-slate-300 mt-0.5 mr-2 flex-shrink-0" aria-hidden="true" />
-                            )}
-                            
+                        <li key={i} className={`flex items-start text-sm p-2 rounded-md transition-all ${isEditMode ? 'cursor-grab hover:bg-white hover:shadow-md border border-transparent hover:border-orange-200 active:cursor-grabbing' : ''} ${isMatch ? 'bg-yellow-100 border border-yellow-300 ring-2 ring-yellow-200' : ''} ${isDimmed ? 'opacity-25 blur-[0.5px]' : 'opacity-100'}`} draggable={isEditMode} onDragStart={(e) => onGuestDragStart(e, guest, tableIndex, i)}>
+                            {isEditMode ? (<button onClick={() => onGuestKeyboardMove(guest, tableIndex, i)} className="p-1 -ml-1 mr-1 text-orange-400 hover:text-orange-600 hover:bg-orange-100 rounded focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label={`Move ${guest.name} to another table`}><Move className="w-4 h-4" aria-hidden="true" /></button>) : (<User className="w-4 h-4 text-slate-300 mt-0.5 mr-2 flex-shrink-0" aria-hidden="true" />)}
                             <div className="flex-1">
                                 <div className="text-slate-800 font-medium">{guest.name}</div>
                                 <div className="flex flex-wrap gap-1 mt-0.5">
-                                    {eventType === 'meal' && guest.diet && guest.diet.toLowerCase() !== 'none' && guest.diet !== '' && (
-                                        <div className="text-xs text-amber-600 bg-amber-50 inline-block px-1.5 py-0.5 rounded border border-amber-100">
-                                            {guest.diet}
-                                        </div>
-                                    )}
-                                    {attributeValue !== null && (
-                                        <div className="text-xs text-[#750014] bg-red-50 inline-block px-1.5 py-0.5 rounded border border-red-100">
-                                            {attributeValue}
-                                        </div>
-                                    )}
+                                    {eventType === 'meal' && guest.diet && guest.diet.toLowerCase() !== 'none' && guest.diet !== '' && (<div className="text-xs text-amber-600 bg-amber-50 inline-block px-1.5 py-0.5 rounded border border-amber-100">{guest.diet}</div>)}
+                                    {attributeValue !== null && (<div className="text-xs text-[#750014] bg-red-50 inline-block px-1.5 py-0.5 rounded border border-red-100">{attributeValue}</div>)}
                                 </div>
                             </div>
                         </li>
                     )})}
-                    {Array.from({ length: Math.max(0, capacity - data.guests.length) }).map((_, k) => (
-                         <li key={`empty-${k}`} className="flex items-center text-sm opacity-30 p-2" aria-hidden="true">
-                            <div className={`w-4 h-4 border border-slate-400 mr-2 border-dashed ${isRound ? 'rounded-full' : 'rounded-sm'}`}></div>
-                            <span className="text-slate-400 italic">Open Seat</span>
-                        </li>
-                    ))}
+                    {Array.from({ length: Math.max(0, capacity - data.guests.length) }).map((_, k) => (<li key={`empty-${k}`} className="flex items-center text-sm opacity-30 p-2" aria-hidden="true"><div className={`w-4 h-4 border border-slate-400 mr-2 border-dashed ${isRound ? 'rounded-full' : 'rounded-sm'}`}></div><span className="text-slate-400 italic">Open Seat</span></li>))}
                 </ul>
             </div>
         </article>

@@ -3,14 +3,12 @@
 // Retrieved 2025-12-08, License - CC BY-SA 4.0
 
 import { defineConfig } from "vite";
-import postcssNesting from 'postcss-nesting';
+import react from '@vitejs/plugin-react' // Make sure this is imported
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-    css: {
-        postcss: {
-            plugins: [
-                postcssNesting
-            ],
-        },
-    },
+   plugins: [
+    react(),
+    tailwindcss(), // 2. Add it to the plugins list
+  ],
 });

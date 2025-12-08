@@ -1,10 +1,11 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
+import './App.css' // This triggers the processing
+import React from 'react'
+import { createRoot } from 'react-dom/client' // FIX 1: Import createRoot specifically
+import App from './App'
 
+// FIX 2: Use React.StrictMode or import { StrictMode } from 'react'
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
+  <React.StrictMode>
     <App />
-  </StrictMode>,
+  </React.StrictMode>,
 )
