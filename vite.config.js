@@ -1,7 +1,16 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+// Source - https://stackoverflow.com/a
+// Posted by Fred Yankowski
+// Retrieved 2025-12-08, License - CC BY-SA 4.0
 
-// https://vite.dev/config/
+import { defineConfig } from "vite";
+import postcssNesting from 'postcss-nesting';
+
 export default defineConfig({
-  plugins: [react()],
-})
+    css: {
+        postcss: {
+            plugins: [
+                postcssNesting
+            ],
+        },
+    },
+});
