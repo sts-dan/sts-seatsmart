@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import html2canvas from 'html2canvas';
-import { Upload, Settings, LayoutGrid, AlertCircle, Check, Download, Table as TableIcon, RefreshCw, User, Trash2, FileSpreadsheet, FileText, Utensils, Sparkles, Loader2, ArrowRight, ListFilter, Briefcase, PieChart, ChevronRight, Circle, Square, Users, Lock, Unlock, Map, GripHorizontal, Shuffle, Search, FileDown, ChevronDown, Move, ShieldCheck, ShieldAlert, Globe } from 'lucide-react';
+// html2canvas removed as it is no longer needed for this approach
+import { Upload, Settings, LayoutGrid, AlertCircle, Check, Download, Table as TableIcon, RefreshCw, User, Trash2, FileSpreadsheet, FileText, Utensils, Sparkles, Loader2, ArrowRight, ListFilter, Briefcase, PieChart, ChevronRight, Circle, Square, Users, Lock, Unlock, Map, GripHorizontal, Shuffle, Search, FileDown, ChevronDown, Move, ShieldCheck, ShieldAlert, Globe, Printer } from 'lucide-react';
 
 const SeatingApp = () => {
   // State
@@ -23,7 +23,6 @@ const SeatingApp = () => {
   // Accessibility & UI State
   const [announcement, setAnnouncement] = useState(''); 
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [isGeneratingLayoutPdf, setIsGeneratingLayoutPdf] = useState(false);
   
   // Refs
   const layoutRef = useRef(null);
@@ -84,7 +83,7 @@ const SeatingApp = () => {
   // Load Fonts
   useEffect(() => {
     const link = document.createElement('link');
-    link.href = '[https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap](https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap)';
+    link.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap';
     link.rel = 'stylesheet';
     document.head.appendChild(link);
   }, []);
@@ -522,42 +521,9 @@ const SeatingApp = () => {
     announce("PDF file exported.");
   };
 
-  const exportLayoutToPDF = async () => {
-    if (!layoutRef.current) return;
-    setIsGeneratingLayoutPdf(true);
-    announce("Generating layout PDF...");
-    try {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // FIXED: Robust check for default export vs named export
-        const h2c = html2canvas.default || html2canvas;
-        
-        const canvas = await h2c(layoutRef.current, {
-            scale: 2, 
-            useCORS: true,
-            logging: false,
-            backgroundColor: '#f1f5f9' 
-        });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('l', 'mm', 'a4');
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const widthRatio = pageWidth / canvas.width;
-        const heightRatio = pageHeight / canvas.height;
-        const ratio = widthRatio > heightRatio ? heightRatio : widthRatio;
-        const canvasWidth = canvas.width * ratio;
-        const canvasHeight = canvas.height * ratio;
-        const marginX = (pageWidth - canvasWidth) / 2;
-        const marginY = (pageHeight - canvasHeight) / 2;
-        pdf.addImage(imgData, 'PNG', marginX, marginY, canvasWidth, canvasHeight);
-        pdf.save("sloan_room_layout.pdf");
-        announce("Layout PDF exported.");
-    } catch (err) {
-        console.error("Layout PDF Error:", err);
-        alert(`Could not generate layout PDF: ${err.message || 'Unknown error'}`);
-    } finally {
-        setIsGeneratingLayoutPdf(false);
-    }
+  const handlePrintLayout = () => {
+    announce("Opening print dialog...");
+    window.print();
   };
 
   // --- Stats ---
@@ -575,9 +541,11 @@ const SeatingApp = () => {
   }, [generatedTables]);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col" style={{fontFamily: "'Roboto', sans-serif"}}>
+    // Added print:bg-white to ensure clean background when printing
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col print:bg-white" style={{fontFamily: "'Roboto', sans-serif"}}>
       <div aria-live="polite" className="sr-only">{announcement}</div>
-      <header className="bg-[#750014] text-white p-6 shadow-lg sticky top-0 z-50" role="banner">
+      {/* Header hidden during print */}
+      <header className="bg-[#750014] text-white p-6 shadow-lg sticky top-0 z-50 print:hidden" role="banner">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div 
             className="flex items-center space-x-3 cursor-pointer focus-visible:ring-2 focus-visible:ring-white rounded-md p-1 outline-none" 
@@ -619,8 +587,9 @@ const SeatingApp = () => {
           </div>
         </div>
       </header>
-      <main className="max-w-6xl mx-auto p-6 flex-grow w-full" role="main">
-        <nav aria-label="Progress Steps" className="flex justify-center mb-8">
+      <main className="max-w-6xl mx-auto p-6 flex-grow w-full print:p-0 print:max-w-none" role="main">
+        {/* Navigation hidden during print */}
+        <nav aria-label="Progress Steps" className="flex justify-center mb-8 print:hidden">
             <ol className="flex items-center space-x-4 list-none">
                 <li><StepButton icon={Upload} label="1. Upload" isActive={activeTab === 'upload'} onClick={() => setActiveTab('upload')} /></li>
                 <li aria-hidden="true" className={`w-12 h-0.5 ${fileData.length > 0 ? 'bg-[#750014]' : 'bg-slate-300'}`} />
@@ -636,7 +605,8 @@ const SeatingApp = () => {
             </ol>
         </nav>
 
-        <div className="bg-white rounded-sm shadow-md border border-slate-200 min-h-[500px] overflow-hidden">
+        {/* Removed shadow and borders when printing */}
+        <div className="bg-white rounded-sm shadow-md border border-slate-200 min-h-[500px] overflow-hidden print:shadow-none print:border-none print:min-h-0">
             {/* View: Upload */}
             {activeTab === 'upload' && (
                 <section className="p-12 flex flex-col items-center text-center justify-center h-full space-y-6" aria-label="Upload Section">
@@ -873,18 +843,22 @@ const SeatingApp = () => {
 
             {/* View: Room Layout */}
             {activeTab === 'layout' && (
-                <section className="bg-slate-100 min-h-[600px] flex flex-col" aria-label="Room Layout">
-                    <div className="p-6 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-40">
+                <section className="bg-slate-100 min-h-[600px] flex flex-col print:bg-white" aria-label="Room Layout">
+                    {/* Header hidden during print */}
+                    <div className="p-6 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-40 print:hidden">
                         <h2 className="text-2xl font-bold text-slate-800">Room Layout Visualization</h2>
                         <div className="flex gap-2">
-                             <button onClick={exportLayoutToPDF} disabled={isGeneratingLayoutPdf} className="px-3 py-2 bg-[#750014] text-white rounded-lg text-sm font-medium hover:bg-[#50000d] flex items-center shadow-sm disabled:opacity-70 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#750014] outline-none">
-                                {isGeneratingLayoutPdf ? <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" /> : <FileText className="w-4 h-4 mr-2" aria-hidden="true" />}
-                                {isGeneratingLayoutPdf ? 'Generating...' : 'Export PDF'}
+                             {/* Replaced Export PDF with Print Layout */}
+                             <button onClick={handlePrintLayout} className="px-3 py-2 bg-[#750014] text-white rounded-lg text-sm font-medium hover:bg-[#50000d] flex items-center shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#750014] outline-none">
+                                <Printer className="w-4 h-4 mr-2" aria-hidden="true" />
+                                Print Layout
                             </button>
                         </div>
                     </div>
-                    <div className="p-8 overflow-auto flex-grow">
-                        <div ref={layoutRef} className="bg-slate-100 p-8 min-w-max">
+                    {/* Reverted overflow settings for print to prevent cutoff */}
+                    <div className="p-8 overflow-auto flex-grow print:p-0 print:overflow-visible">
+                        {/* Reverted inline styles to Tailwind classes */}
+                        <div ref={layoutRef} className="bg-slate-100 p-8 min-w-max print:bg-white print:p-0 print:min-w-0">
                             <RoomLayoutView tables={generatedTables} shape={tableShape} />
                         </div>
                     </div>
@@ -900,10 +874,11 @@ const SeatingApp = () => {
 
 const RoomLayoutView = ({ tables, shape }) => {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16 print:grid-cols-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16 print:grid-cols-2 print:gap-8">
             {tables.map((table, i) => (
                 <div key={i} className="flex flex-col items-center break-inside-avoid">
                     <div className="relative w-80 h-80 flex items-center justify-center mb-8">
+                        {/* Reverted to original Tailwind classes (removed inline styles) */}
                         <div className={`absolute flex items-center justify-center bg-white border-2 border-slate-300 shadow-md z-10 ${shape === 'rectangle' ? 'w-40 h-24 rounded-md' : 'w-32 h-32 rounded-full'}`}>
                             <div className="text-center">
                                 <div className="font-bold text-slate-700 text-lg">Table {table.id + 1}</div>
@@ -926,9 +901,11 @@ const RoomLayoutView = ({ tables, shape }) => {
                             }
                             return (
                                 <div key={idx} className="absolute flex flex-col items-center justify-center w-24" style={style}>
+                                    {/* Reverted to original Tailwind classes */}
                                     <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center mb-1 shadow-sm text-xs font-bold text-slate-500 z-30 relative">
                                         {idx + 1}
                                     </div>
+                                    {/* Reverted to original Tailwind classes */}
                                     <div className="text-[10px] font-medium text-slate-800 text-center leading-tight bg-white/95 px-2 py-0.5 rounded shadow-sm border border-slate-200 min-w-[80px] w-auto max-w-[120px] z-20 break-words">
                                         {guest.name}
                                     </div>
