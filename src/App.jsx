@@ -1,8 +1,9 @@
 import './App.css';
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import { Upload, Settings, LayoutGrid, AlertCircle, Check, Download, Table as TableIcon, RefreshCw, User, Trash2, FileSpreadsheet, FileText, Utensils, Sparkles, Loader2, ArrowRight, ListFilter, Briefcase, PieChart, ChevronRight, Circle, Square, Users, Lock, Unlock, Map, GripHorizontal, Shuffle, Search, FileDown, ChevronDown, Move, ShieldCheck, ShieldAlert, Globe } from 'lucide-react';
 
@@ -507,7 +508,8 @@ const SeatingApp = () => {
         });
     });
 
-    doc.autoTable({
+    // FIXED: Using autoTable from import
+    autoTable(doc, {
         head: head,
         body: tableRows,
         startY: 35,
@@ -526,7 +528,11 @@ const SeatingApp = () => {
     announce("Generating layout PDF...");
     try {
         await new Promise(resolve => setTimeout(resolve, 500));
-        const canvas = await html2canvas(layoutRef.current, {
+        
+        // FIXED: Robust check for default export vs named export
+        const h2c = html2canvas.default || html2canvas;
+        
+        const canvas = await h2c(layoutRef.current, {
             scale: 2, 
             useCORS: true,
             logging: false,
@@ -548,7 +554,7 @@ const SeatingApp = () => {
         announce("Layout PDF exported.");
     } catch (err) {
         console.error("Layout PDF Error:", err);
-        alert("Could not generate layout PDF.");
+        alert(`Could not generate layout PDF: ${err.message || 'Unknown error'}`);
     } finally {
         setIsGeneratingLayoutPdf(false);
     }
@@ -890,7 +896,8 @@ const SeatingApp = () => {
   );
 };
 
-// --- Sub-components (TableCard, RoomLayoutView, etc.) from previous steps ---
+// --- Sub-components ---
+
 const RoomLayoutView = ({ tables, shape }) => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16 print:grid-cols-2">
